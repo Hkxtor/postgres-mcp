@@ -133,7 +133,17 @@ class IndexHealthCalc:
                 WHERE
                     a.attnum > 0
                 GROUP BY
-                    1, 2, 3, 4, 5, 6, 7, 8, 9
+                    i.nspname,
+                    i.relname,
+                    i.reltuples,
+                    i.relpages,
+                    i.relam,
+                    starelid,
+                    table_oid,
+                    index_oid,
+                    bs,
+                    maxalign,
+                    pagehdr
             ),
             index_aligned AS (
                 SELECT

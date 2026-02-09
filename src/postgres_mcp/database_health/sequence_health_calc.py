@@ -1,9 +1,5 @@
-import re
 from dataclasses import dataclass
 
-from psycopg.sql import Identifier
-
-from ..sql import SafeSqlDriver
 from ..sql import SqlDriver
 
 
@@ -62,103 +58,91 @@ class SequenceHealthCalc:
 
     async def _get_sequence_metrics(self) -> list[SequenceMetrics]:
         """Get metrics for sequences in the database."""
-        # First get all sequences used as default values
-        sequences = await self.sql_driver.execute_query("""
+        # Use a single robust query to get all sequences and their usage via pg_depend
+        query = """
+            WITH sequence_usage AS (
+                -- Sequences owned by columns (SERIAL, IDENTITY)
+                SELECT
+                    s.oid AS sequence_oid,
+                    n.nspname AS table_schema,
+                    c.relname AS table_name,
+                    a.attname AS column_name,
+                    format_type(a.atttypid, a.atttypmod) AS column_type
+                FROM pg_class s
+                JOIN pg_depend d ON d.objid = s.oid AND d.deptype IN ('a', 'i')
+                JOIN pg_class c ON c.oid = d.refobjid
+                JOIN pg_namespace n ON n.oid = c.relnamespace
+                JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = d.refobjsubid
+                WHERE s.relkind = 'S'
+                
+                UNION
+                
+                -- Sequences used in DEFAULT expressions
+                SELECT
+                    s.oid AS sequence_oid,
+                    n.nspname AS table_schema,
+                    c.relname AS table_name,
+                    a.attname AS column_name,
+                    format_type(a.atttypid, a.atttypmod) AS column_type
+                FROM pg_attrdef ad
+                JOIN pg_attribute a ON a.attrelid = ad.adrelid AND a.attnum = ad.adnum
+                JOIN pg_class c ON c.oid = a.attrelid
+                JOIN pg_namespace n ON n.oid = c.relnamespace
+                JOIN pg_depend d ON d.objid = ad.oid AND d.classid = 'pg_attrdef'::regclass AND d.refclassid = 'pg_class'::regclass
+                JOIN pg_class s ON s.oid = d.refobjid AND s.relkind = 'S'
+            )
             SELECT
-                n.nspname AS table_schema,
-                c.relname AS table,
-                attname AS column,
-                format_type(a.atttypid, a.atttypmod) AS column_type,
-                pg_get_expr(d.adbin, d.adrelid) AS default_value
-            FROM
-                pg_catalog.pg_attribute a
-            INNER JOIN
-                pg_catalog.pg_class c ON c.oid = a.attrelid
-            INNER JOIN
-                pg_catalog.pg_namespace n ON n.oid = c.relnamespace
-            INNER JOIN
-                pg_catalog.pg_attrdef d ON (a.attrelid, a.attnum) = (d.adrelid, d.adnum)
-            WHERE
-                NOT a.attisdropped
-                AND a.attnum > 0
-                AND pg_get_expr(d.adbin, d.adrelid) LIKE 'nextval%'
-                AND n.nspname NOT LIKE 'pg\\_temp\\_%'
-        """)
+                ps.schemaname AS schema,
+                ps.sequencename AS sequence,
+                ps.last_value,
+                ps.max_value,
+                COALESCE(u.column_type, ps.data_type::text) AS column_type,
+                COALESCE(u.table_name, '') AS table_name,
+                COALESCE(u.column_name, '') AS column_name,
+                has_sequence_privilege(quote_ident(ps.schemaname) || '.' || quote_ident(ps.sequencename), 'SELECT') as readable
+            FROM pg_sequences ps
+            JOIN pg_class s ON s.relname = ps.sequencename 
+                AND s.relnamespace = (SELECT oid FROM pg_namespace WHERE nspname = ps.schemaname)
+            LEFT JOIN sequence_usage u ON u.sequence_oid = s.oid
+            WHERE ps.schemaname NOT IN ('information_schema', 'pg_catalog')
+            AND ps.schemaname NOT LIKE 'pg\\_temp\\_%'
+        """
+
+        sequences = await self.sql_driver.execute_query(query)
 
         if not sequences:
             return []
 
-        result_list = [dict(x.cells) for x in sequences]
-
         # Process each sequence
         sequence_metrics = []
-        for seq in result_list:
-            # Parse the sequence name from default value
-            schema, sequence = self._parse_sequence_name(seq["default_value"])
-            if not sequence:
+        for seq_row in sequences:
+            seq = dict(seq_row.cells)
+
+            # If we can't read it, we skip health check for it
+            if not seq["readable"]:
                 continue
 
-            # Determine max value based on column type
-            max_value = 2147483647 if seq["column_type"] == "integer" else 9223372036854775807
+            # Handle sequences that haven't been used yet (last_value is None)
+            last_val = seq["last_value"] if seq["last_value"] is not None else 0
+            max_val = seq["max_value"]
 
-            # Get sequence attributes
-            attrs = await SafeSqlDriver.execute_param_query(
-                self.sql_driver,
-                """
-                SELECT
-                    has_sequence_privilege('{}', 'SELECT') AS readable,
-                    last_value
-                FROM {}
-                """,
-                [Identifier(schema, sequence), Identifier(schema, sequence)],
-            )
-
-            if not attrs:
+            # Avoid division by zero
+            if not max_val:
                 continue
 
-            result_list = [dict(x.cells) for x in attrs]
-
-            attr = result_list[0]
             sequence_metrics.append(
                 SequenceMetrics(
-                    schema=schema,
-                    table=seq["table"],
-                    column=seq["column"],
-                    sequence=sequence,
+                    schema=seq["schema"],
+                    table=seq["table_name"],
+                    column=seq["column_name"],
+                    sequence=seq["sequence"],
                     column_type=seq["column_type"],
-                    last_value=attr["last_value"],
-                    max_value=max_value,
-                    readable=attr["readable"],
-                    is_healthy=attr["last_value"] / max_value <= self.threshold,
+                    last_value=last_val,
+                    max_value=max_val,
+                    readable=seq["readable"],
+                    is_healthy=(last_val / max_val) <= self.threshold,
                 )
             )
 
         return sequence_metrics
 
-    def _parse_sequence_name(self, default_value: str) -> tuple[str, str]:
-        """Parse schema and sequence name from default value expression.
-
-        Handles formats like:
-        - nextval('id_seq'::regclass)
-        - nextval(('id_seq'::text)::regclass)
-        - nextval('"UpperCaseSeq"'::regclass)
-        - nextval('"Schema"."Seq"'::regclass)
-
-        Note: Sequence names containing literal dots (e.g., "my.seq") are not
-        supported and will be incorrectly parsed as schema.name.
-        """
-        # Extract the sequence reference from inside the single quotes
-        # Handles both nextval('...') and nextval(('...'::text)::regclass)
-        match = re.search(r"nextval\(\(?'([^']+)'", default_value)
-        if not match:
-            return "public", ""
-
-        clean_value = match.group(1)
-        # Remove quotes so sql.Identifier can add them correctly
-        clean_value = clean_value.replace('"', "")
-
-        # Split into schema and sequence
-        parts = clean_value.split(".")
-        if len(parts) == 1:
-            return "public", parts[0]  # Default to public schema
-        return parts[0], parts[1]
