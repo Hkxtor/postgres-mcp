@@ -74,9 +74,9 @@ class SequenceHealthCalc:
                 JOIN pg_namespace n ON n.oid = c.relnamespace
                 JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = d.refobjsubid
                 WHERE s.relkind = 'S'
-                
+
                 UNION
-                
+
                 -- Sequences used in DEFAULT expressions
                 SELECT
                     s.oid AS sequence_oid,
@@ -101,7 +101,7 @@ class SequenceHealthCalc:
                 COALESCE(u.column_name, '') AS column_name,
                 has_sequence_privilege(quote_ident(ps.schemaname) || '.' || quote_ident(ps.sequencename), 'SELECT') as readable
             FROM pg_sequences ps
-            JOIN pg_class s ON s.relname = ps.sequencename 
+            JOIN pg_class s ON s.relname = ps.sequencename
                 AND s.relnamespace = (SELECT oid FROM pg_namespace WHERE nspname = ps.schemaname)
             LEFT JOIN sequence_usage u ON u.sequence_oid = s.oid
             WHERE ps.schemaname NOT IN ('information_schema', 'pg_catalog')
@@ -145,4 +145,3 @@ class SequenceHealthCalc:
             )
 
         return sequence_metrics
-

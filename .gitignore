@@ -181,5 +181,4 @@ devenv.local.nix
 .direnv
 
 # pre-commit
-.pre-commit-config.yaml
 *.sql
