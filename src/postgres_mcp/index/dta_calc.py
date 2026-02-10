@@ -136,8 +136,40 @@ class DatabaseTuningAdvisor(IndexTuningBase):
 
         # Filter out rarely used columns
         # e.g. skip columns that appear in fewer than self.min_column_usage queries
+        # Common Oracle compatibility views that cannot be indexed by hypopg
+        ignored_oracle_views = {
+            "user_tab_columns",
+            "all_tab_columns",
+            "dba_tab_columns",
+            "user_tables",
+            "all_tables",
+            "dba_tables",
+            "user_views",
+            "all_views",
+            "dba_views",
+            "user_sequences",
+            "all_sequences",
+            "dba_sequences",
+            "user_source",
+            "all_source",
+            "dba_source",
+            "user_ind_columns",
+            "all_ind_columns",
+            "dba_ind_columns",
+            "user_indexes",
+            "all_indexes",
+            "dba_indexes",
+            "user_objects",
+            "all_objects",
+            "dba_objects",
+            "dual",
+        }
+
         table_columns: dict[str, set[str]] = {}
         for tbl, usage_map in table_columns_usage.items():
+            if tbl.lower() in ignored_oracle_views:
+                continue
+
             kept_cols = {c for c, usage in usage_map.items() if usage >= self.min_column_usage}
             if kept_cols:
                 table_columns[tbl] = kept_cols

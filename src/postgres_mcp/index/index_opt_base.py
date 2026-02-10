@@ -338,7 +338,12 @@ class IndexTuningBase(ABC):
             # Replace parameter placeholders with dummy values
             query_text = await self._sql_bind_params.replace_parameters(query_text)
 
-            parsed = parse_sql(query_text)
+            try:
+                parsed = parse_sql(query_text)
+            except Exception as e:
+                logger.debug(f"Skipping non-parseable query (error: {e}): {query_text[:50]}...")
+                continue
+
             if not parsed:
                 logger.debug(f"Skipping non-parseable query: {query_text[:50]}...")
                 continue
