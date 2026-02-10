@@ -28,7 +28,7 @@ class TestSequenceHealthCalc:
         mock_driver.execute_query.return_value = [mock_row]
 
         calc = SequenceHealthCalc(sql_driver=mock_driver, threshold=0.9)
-        metrics = await calc._get_sequence_metrics()
+        metrics = await calc._get_sequence_metrics()  # pyright: ignore[reportPrivateUsage]
 
         assert len(metrics) == 1
         m = metrics[0]
@@ -62,7 +62,7 @@ class TestSequenceHealthCalc:
         mock_driver.execute_query.return_value = [mock_row]
 
         calc = SequenceHealthCalc(sql_driver=mock_driver, threshold=0.9)
-        metrics = await calc._get_sequence_metrics()
+        metrics = await calc._get_sequence_metrics()  # pyright: ignore[reportPrivateUsage]
 
         assert len(metrics) == 1
         assert metrics[0].last_value == 0
@@ -89,7 +89,7 @@ class TestSequenceHealthCalc:
         mock_driver.execute_query.return_value = [mock_row]
 
         calc = SequenceHealthCalc(sql_driver=mock_driver, threshold=0.9)
-        metrics = await calc._get_sequence_metrics()
+        metrics = await calc._get_sequence_metrics()  # pyright: ignore[reportPrivateUsage]
 
         # Should skip non-readable sequences
         assert len(metrics) == 0
@@ -115,7 +115,7 @@ class TestSequenceHealthCalc:
         mock_driver.execute_query.return_value = [mock_row]
 
         calc = SequenceHealthCalc(sql_driver=mock_driver, threshold=0.9)
-        metrics = await calc._get_sequence_metrics()
+        metrics = await calc._get_sequence_metrics()  # pyright: ignore[reportPrivateUsage]
 
         assert len(metrics) == 1
         assert metrics[0].is_healthy is False
