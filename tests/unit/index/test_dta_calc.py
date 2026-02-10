@@ -310,9 +310,9 @@ async def test_index_exists(create_dta):
     # Run all test cases
     for tc in test_cases:
         result = dta._index_exists(tc["candidate"], tc["existing_defs"])
-        assert (
-            result == tc["expected"]
-        ), f"Failed: {tc['description']}\nCandidate: {tc['candidate']}\nExisting: {tc['existing_defs']}\nExpected: {tc['expected']}"
+        assert result == tc["expected"], (
+            f"Failed: {tc['description']}\nCandidate: {tc['candidate']}\nExisting: {tc['existing_defs']}\nExpected: {tc['expected']}"
+        )
 
     # Test fallback mechanism when parsing fails
     with patch("pglast.parser.parse_sql", side_effect=Exception("Parsing error")):
