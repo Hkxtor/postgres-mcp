@@ -11,7 +11,6 @@ from unittest.mock import patch
 import pytest
 import pytest_asyncio
 from pglast import parse_sql
-
 from postgres_mcp.artifacts import ExplainPlanArtifact
 from postgres_mcp.index.dta_calc import ColumnCollector
 from postgres_mcp.index.dta_calc import ConditionColumnCollector
@@ -311,9 +310,9 @@ async def test_index_exists(create_dta):
     # Run all test cases
     for tc in test_cases:
         result = dta._index_exists(tc["candidate"], tc["existing_defs"])
-        assert result == tc["expected"], (
-            f"Failed: {tc['description']}\nCandidate: {tc['candidate']}\nExisting: {tc['existing_defs']}\nExpected: {tc['expected']}"
-        )
+        assert (
+            result == tc["expected"]
+        ), f"Failed: {tc['description']}\nCandidate: {tc['candidate']}\nExisting: {tc['existing_defs']}\nExpected: {tc['expected']}"
 
     # Test fallback mechanism when parsing fails
     with patch("pglast.parser.parse_sql", side_effect=Exception("Parsing error")):
@@ -1170,7 +1169,7 @@ async def test_enumerate_greedy_pareto_cost_benefit(async_sql_driver):
 
     current_indexes = set()
     current_cost = base_cost
-    final_indexes_lower_threshold, final_cost_lower_threshold = await dta._enumerate_greedy(  # type: ignore
+    final_indexes_lower_threshold, _final_cost_lower_threshold = await dta._enumerate_greedy(  # type: ignore
         queries, current_indexes, current_cost, candidate_indexes.copy()
     )
 
@@ -1182,7 +1181,7 @@ async def test_enumerate_greedy_pareto_cost_benefit(async_sql_driver):
 
     current_indexes = set()
     current_cost = base_cost
-    final_indexes_higher_threshold, final_cost_higher_threshold = await dta._enumerate_greedy(  # type: ignore
+    final_indexes_higher_threshold, _final_cost_higher_threshold = await dta._enumerate_greedy(  # type: ignore
         queries, current_indexes, current_cost, candidate_indexes.copy()
     )
 
