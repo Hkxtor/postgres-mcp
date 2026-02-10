@@ -5,6 +5,7 @@ from unittest.mock import call
 from unittest.mock import patch
 
 import pytest
+
 from postgres_mcp.sql import DbConnPool
 from postgres_mcp.sql import SqlDriver
 
