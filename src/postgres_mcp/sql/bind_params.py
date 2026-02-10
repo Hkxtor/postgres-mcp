@@ -40,9 +40,12 @@ class TableAliasVisitor(Visitor):
         """Visit table references, including those in FROM clause."""
         if isinstance(node, RangeVar):  # Type narrowing for RangeVar
             if node.relname is not None:
-                self.tables.add(node.relname)
-            if node.alias and node.alias.aliasname is not None:
-                self.aliases[node.alias.aliasname] = str(node.relname)
+                table_name = node.relname
+                if node.schemaname:
+                    table_name = f"{node.schemaname}.{table_name}"
+                self.tables.add(table_name)
+                if node.alias and node.alias.aliasname is not None:
+                    self.aliases[node.alias.aliasname] = table_name
 
     def visit_JoinExpr(self, ancestors: list[Node], node: Node) -> None:  # noqa: N802
         """Visit both sides of JOIN expressions."""

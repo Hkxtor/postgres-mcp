@@ -814,10 +814,6 @@ class ConditionColumnCollector(ColumnCollector):
             # For unqualified columns, check all tables in context
             found_match = False
             for table in tables:
-                # Skip schema qualification if present
-                if "." in table:
-                    _, table = table.split(".", 1)
-
                 # Add column to all tables that have it
                 if self._column_exists(table, column):
                     if table not in self.condition_columns:

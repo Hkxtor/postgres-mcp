@@ -42,7 +42,8 @@ class IndexDefinition:
 
         column_part = "_".join(cleaned_columns)
         suffix = "" if self.using == "btree" else f"_{self.using}"
-        base = f"crystaldba_idx_{self.table}_{column_part}_{len(self.columns)}"
+        safe_table = self.table.replace(".", "_")
+        base = f"crystaldba_idx_{safe_table}_{column_part}_{len(self.columns)}"
         return f"{base}{suffix}"
 
     def __str__(self) -> str:
